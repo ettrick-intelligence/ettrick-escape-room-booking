@@ -24,3 +24,5 @@ vendor/
 /playwright/.cache/
 /playwright/.auth/
 .env
+old.env
+svn-ettrick/

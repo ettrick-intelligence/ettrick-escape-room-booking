@@ -326,31 +326,12 @@ class EERB_Public {
     // ── AJAX: Confirm payment ─────────────────────────────────────────────────
 
     public function ajax_confirm_payment() {
+        // Security fix (v1.3.1): Payment status is set exclusively by the Stripe
+        // webhook (handle_stripe_webhook). This endpoint is intentionally a no-op
+        // to prevent unauthenticated booking confirmation.
+        // Reported by ryan fabella (WPScan request 11770271).
         check_ajax_referer( 'eerb_public_nonce', 'nonce' );
-        $booking_id = (int) sanitize_text_field( wp_unslash( $_POST['booking_id'] ) );
-        $pi_id      = sanitize_text_field( wp_unslash( $_POST['payment_intent_id'] ) );
-        if ( ! $booking_id ) EERB_Helpers::json_error( 'Invalid booking.' );
-
-        EERB_DB::update_booking( $booking_id, array(
-            'status'           => 'confirmed',
-            'stripe_payment_id'=> $pi_id,
-            'updated_at'       => current_time( 'mysql' ),
-        ) );
-
-        $booking = EERB_DB::get_booking( $booking_id );
-        EERB_DB::delete_hold( $booking->game_id, $booking->slot_start );
-        EERB_DB::add_booking_history( array(
-            'booking_id'  => $booking_id,
-            'action'      => 'created',
-            'changed_by'  => 'customer',
-            'created_at'  => current_time( 'mysql' ),
-        ) );
-
-        // Send confirmation emails
-        $emails = new EERB_Emails();
-        $emails->send_confirmation( EERB_DB::get_booking( $booking_id ) );
-
-        EERB_Helpers::json_success( array( 'booking_ref' => $booking->booking_ref ) );
+        EERB_Helpers::json_success( array( 'message' => 'ok' ) );
     }
 
     // ── AJAX: Stripe webhook ──────────────────────────────────────────────────
@@ -409,8 +390,8 @@ class EERB_Public {
             return;
         }
 
-        // Already confirmed (e.g. by the browser callback) — skip
-        if ( $booking->status === 'confirmed' ) {
+        // Skip if already confirmed or cancelled (duplicate webhook delivery)
+        if ( in_array( $booking->status, array( 'confirmed', 'cancelled' ), true ) ) {
             return;
         }
 

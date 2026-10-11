@@ -410,13 +410,15 @@
                         $('#erb-stripe-card-errors').text(result.error.message).show();
                         ERB.Booking.resetPayBtn();
                     } else if (result.paymentIntent.status === 'succeeded') {
-                        // 3. Confirm with our server
+                        // 3. Notify server that payment succeeded, then show confirmation.
+                        // booking_ref comes from the create_booking response (data) since
+                        // the confirm_payment endpoint is a security no-op in v1.3.1+.
                         ERB.ajax('eerb_confirm_payment', {
                             booking_id:        data.booking_id,
                             payment_intent_id: result.paymentIntent.id,
                         },
-                        function (confirmed) {
-                            ERB.Booking.onSuccess(confirmed);
+                        function () {
+                            ERB.Booking.onSuccess({ booking_ref: data.booking_ref });
                         },
                         function () {
                             ERB.Booking.onSuccess({ booking_ref: data.booking_ref });
