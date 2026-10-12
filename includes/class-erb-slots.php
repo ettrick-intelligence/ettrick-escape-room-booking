@@ -30,12 +30,13 @@ class EERB_Slots {
         $blocked        = self::index_datetimes( EERB_DB::get_blocked_slots( $game_id, $dt_from, $dt_to ) );
 
         // If this game shares a room, load the sibling's bookings/holds too
-        $sibling_booked = array();
-        $sibling_held   = array();
+        // Use range-based overlap detection so differing game durations are handled correctly.
+        $sibling_booked_ranges = array();
+        $sibling_held_ranges   = array();
         $sibling = EERB_DB::get_room_sibling( $game_id );
         if ( $sibling ) {
-            $sibling_booked = self::index_datetimes( EERB_DB::get_booked_slots( $sibling->id, $dt_from, $dt_to ) );
-            $sibling_held   = self::index_datetimes( EERB_DB::get_held_slots(   $sibling->id, $dt_from, $dt_to ) );
+            $sibling_booked_ranges = self::index_ranges( EERB_DB::get_booked_slots( $sibling->id, $dt_from, $dt_to ) );
+            $sibling_held_ranges   = self::index_ranges( EERB_DB::get_held_slots(   $sibling->id, $dt_from, $dt_to ) );
         }
 
         $now             = time();
@@ -92,9 +93,9 @@ class EERB_Slots {
                     $status = 'past';
                 } elseif ( ( $ts - $now ) < $min_notice_secs ) {
                     $status = 'notice'; // within min-notice window
-                } elseif ( isset( $booked[ $slot_key ] ) || isset( $sibling_booked[ $slot_key ] ) ) {
+                } elseif ( isset( $booked[ $slot_key ] ) || self::overlaps_ranges( $sibling_booked_ranges, $ts, $ts + (int) $game->duration_minutes * 60 ) ) {
                     $status = 'booked';
-                } elseif ( isset( $held[ $slot_key ] ) || isset( $sibling_held[ $slot_key ] ) ) {
+                } elseif ( isset( $held[ $slot_key ] ) || self::overlaps_ranges( $sibling_held_ranges, $ts, $ts + (int) $game->duration_minutes * 60 ) ) {
                     $status = 'held';
                 } elseif ( isset( $blocked[ $slot_key ] ) ) {
                     $status = 'blocked';
@@ -135,5 +136,33 @@ class EERB_Slots {
             $idx[ $key ] = true;
         }
         return $idx;
+    }
+
+    /**
+     * Index slot rows as [start_ts, end_ts] pairs for overlap detection.
+     * Used for sibling-room bookings where game durations may differ.
+     */
+    private static function index_ranges( $rows ) {
+        $ranges = array();
+        foreach ( $rows as $r ) {
+            $ranges[] = array(
+                strtotime( $r->slot_start ),
+                strtotime( $r->slot_end ),
+            );
+        }
+        return $ranges;
+    }
+
+    /**
+     * Returns true if [check_start, check_end) overlaps any range in $ranges.
+     * Two slots overlap when one starts before the other ends (exclusive boundary).
+     */
+    private static function overlaps_ranges( $ranges, $check_start, $check_end ) {
+        foreach ( $ranges as $range ) {
+            if ( $check_start < $range[1] && $check_end > $range[0] ) {
+                return true;
+            }
+        }
+        return false;
     }
 }
