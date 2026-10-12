@@ -35,11 +35,13 @@ A complete booking and payment system built specifically for escape room venues.
 * Unlimited games and rooms
 * Promo codes with date ranges and use limits
 * Revenue reports and analytics
-* Gamekeepers — multiple staff notification recipients
+* Gamekeeper mode — a dedicated mobile-friendly view your staff can use on their smartphones to block and unblock time slots on the fly, with no WordPress admin access required
+* Calendar feed — a subscribe URL your staff can add to Google Calendar, Apple Calendar or Outlook so bookings appear automatically in whatever calendar they already use
 * Shared room double-booking prevention
 * Branded HTML emails with your venue colours
 * Customer accounts
 * Booking horizon and minimum notice period controls
+* Multiple staff email notification recipients
 * Priority support
 
 = Simple Setup =
