@@ -47,12 +47,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
         </div>
         <p class="erb-players-label"><?php esc_html_e( 'How many players will be attending?', 'ettrick-escape-room-booking' ); ?></p>
         <div class="erb-player-grid" id="erb-player-grid">
-            <?php for ( $i = 2; $i <= 8; $i++ ) : ?>
-            <button class="erb-player-btn" data-players="<?php echo absint( $i ); ?>">
-                <div class="erb-player-btn__num"><?php echo absint( $i ); ?></div>
-                <div class="erb-player-btn__word"><?php esc_html_e( 'players', 'ettrick-escape-room-booking' ); ?></div>
-            </button>
-            <?php endfor; ?>
+            <!-- Buttons rendered by JS using gameData.max_players -->
         </div>
         <div class="erb-price-box" id="erb-price-box" style="display:none;">
             <div>

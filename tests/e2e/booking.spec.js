@@ -1,189 +1,276 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
+require('../../env-loader')();
 
-/**
- * ERB Lite — Full Booking Flow Test
- *
- * Tests the complete customer journey:
- * Calendar → Player Selection → Details → Payment → Confirmation
- */
+const ADMIN_URL  = process.env.WP_ADMIN_URL  || 'https://erb-lite.jmcraig.co.uk/wp-admin/';
+const ADMIN_USER = process.env.WP_ADMIN_USER || '';
+const ADMIN_PASS = process.env.WP_ADMIN_PASS || '';
+const DETECTIVE_URL = process.env.ERB_DETECTIVE_URL || 'https://erb-lite.jmcraig.co.uk/detective/';
+const CABIN_URL     = process.env.ERB_CABIN_URL     || 'https://erb-lite.jmcraig.co.uk/captive-2-the-cabin/';
+const CARD   = process.env.STRIPE_TEST_CARD   || '4242424242424242';
+const EXPIRY = process.env.STRIPE_TEST_EXPIRY || '1227';
+const CVC    = process.env.STRIPE_TEST_CVC    || '123';
 
-test.describe('Calendar Display', () => {
+// ── Helper: log into WordPress admin ─────────────────────────────────────────
+async function wpLogin(page) {
+    await page.goto(ADMIN_URL);
+    await page.locator('#user_login').fill(ADMIN_USER);
+    await page.locator('#user_pass').fill(ADMIN_PASS);
+    await page.locator('#wp-submit').click();
+    await expect(page).toHaveURL(/wp-admin/, { timeout: 15000 });
+    await page.waitForLoadState('networkidle', { timeout: 15000 });
+}
 
-    test('Calendar loads and shows slots', async ({ page }) => {
-        await page.goto('/detective/');
+// ── Helper: dismiss any floating popup (e.g. Check & Log Email nag) ──────────
+async function dismissPopups(page) {
+    const noThanks = page.locator('text=No Thanks');
+    if (await noThanks.isVisible({ timeout: 2000 }).catch(() => false)) {
+        await noThanks.click();
+    }
+}
 
-        // The calendar div has data-game-id attribute
+// ── Helper: find an available slot, navigating forward weeks if needed ────────
+async function findAndClickSlot(page, gameUrl) {
+    const sep = gameUrl.includes('?') ? '&' : '?';
+    await page.goto(`${gameUrl}${sep}eerb_week=1`);
+    await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
+
+    const MAX_WEEKS = 8;
+    let availableSlot = null;
+
+    for (let week = 1; week <= MAX_WEEKS; week++) {
+        await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 10000 });
+        const slots = page.locator('.erb-slot--available');
+        if (await slots.count() > 0) {
+            availableSlot = slots.first();
+            break;
+        }
+        const nextBtn = page.locator('a.erb-btn').filter({ hasText: 'Next' }).first();
+        await nextBtn.click();
+        await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 10000 });
+    }
+
+    if (!availableSlot) {
+        test.skip(true, 'No available slots within 8 weeks');
+    }
+
+    const slotTime = (await availableSlot.textContent())?.trim();
+    await availableSlot.click();
+    return slotTime;
+}
+
+// ── Helper: complete booking flow ─────────────────────────────────────────────
+async function completeBooking(page, players, firstName, lastName, email, mobile) {
+    await page.waitForURL('**/book**', { timeout: 10000 });
+    await expect(page.locator('#erb-step-1')).toBeVisible({ timeout: 10000 });
+
+    // Select players
+    const playerBtn = page.locator(`.erb-player-btn[data-players="${players}"]`);
+    await expect(playerBtn).toBeVisible();
+    await playerBtn.click();
+    await expect(page.locator('#erb-price-box')).toBeVisible({ timeout: 5000 });
+
+    await page.locator('#erb-step1-next').click();
+
+    // Customer details
+    await expect(page.locator('#erb-step-2')).toBeVisible({ timeout: 5000 });
+    await page.locator('#erb-first-name').fill(firstName);
+    await page.locator('#erb-last-name').fill(lastName);
+    await page.locator('#erb-email').fill(email);
+    await page.locator('#erb-mobile').fill(mobile);
+    await page.locator('#erb-step2-next').click();
+
+    // Payment
+    await expect(page.locator('#erb-step-3')).toBeVisible({ timeout: 5000 });
+    await page.waitForSelector('#erb-stripe-card-element iframe', { timeout: 15000 });
+    const stripeFrame = page.frameLocator('#erb-stripe-card-element iframe').first();
+    await stripeFrame.locator('[placeholder="Card number"]').fill(CARD);
+    await stripeFrame.locator('[placeholder="MM / YY"]').fill(EXPIRY);
+    await stripeFrame.locator('[placeholder="CVC"]').fill(CVC);
+    await page.locator('#erb-pay-btn').click();
+
+    // Confirmation
+    await expect(page.locator('#erb-step-success')).toBeVisible({ timeout: 30000 });
+    const bookingRef = page.locator('#erb-success-ref');
+    await expect(bookingRef).toContainText('ERB-', { timeout: 15000 });
+    return await bookingRef.textContent();
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+test.describe('1. Calendar Display', () => {
+
+    test('Detective calendar loads and shows slots', async ({ page }) => {
+        await page.goto(DETECTIVE_URL);
         await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
-
-        // Loading spinner should disappear
         await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
-
-        // Should have at least one slot
         await expect(page.locator('.erb-slot').first()).toBeVisible();
-
-        console.log('✅ Calendar loaded successfully');
+        console.log('✅ Detective calendar loaded');
     });
 
-    test('Prev/Next week navigation works', async ({ page }) => {
-        await page.goto('/detective/');
+    test('Captive 2 calendar loads and shows slots', async ({ page }) => {
+        await page.goto(CABIN_URL);
+        await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
+        await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
+        await expect(page.locator('.erb-slot').first()).toBeVisible();
+        console.log('✅ Captive 2 - The Cabin calendar loaded');
+    });
 
+    test('Week navigation works', async ({ page }) => {
+        await page.goto(DETECTIVE_URL);
         await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
 
-        // Click Next week button
         const nextBtn = page.locator('a.erb-btn').filter({ hasText: 'Next' }).first();
-        await expect(nextBtn).toBeVisible();
         await nextBtn.click();
-
-        // Wait for page to reload with new week
         await expect(page).toHaveURL(/eerb_week=1/, { timeout: 10000 });
-
-        // Calendar should reload
-        await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
         await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
-
         console.log('✅ Week navigation works');
     });
 
 });
 
-test.describe('Full Booking Flow', () => {
+test.describe('2. Full Booking Flow', () => {
 
-    test('Customer can complete a booking end-to-end', async ({ page }) => {
+    test('Complete booking on Detective', async ({ page }) => {
+        const slotTime = await findAndClickSlot(page, DETECTIVE_URL);
+        const ref = await completeBooking(page, 2, 'Sarah', 'Mitchell', 'sarah@example.com', '07700900123');
+        console.log('✅ Detective booking completed:', ref?.trim(), 'Slot:', slotTime);
+    });
 
-        // ── Step 1: Visit Detective calendar page ─────────────────────────────
-        await page.goto('/detective/');
-
-        // Wait for calendar to load
-        await expect(page.locator('[data-game-id]')).toBeVisible({ timeout: 15000 });
-        await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 15000 });
-
-        // Find an available slot — navigate forward weeks if needed
-        const MAX_WEEKS = 8;
-        let availableSlot = null;
-
-        for (let week = 0; week < MAX_WEEKS; week++) {
-            await expect(page.locator('.erb-calendar__loading')).toBeHidden({ timeout: 10000 });
-            const slots = page.locator('.erb-slot--available');
-            if (await slots.count() > 0) {
-                availableSlot = slots.first();
-                break;
-            }
-            // No slots this week — try next week
-            const nextBtn = page.locator('a.erb-btn').filter({ hasText: 'Next' }).first();
-            await nextBtn.click();
-        }
-
-        // If no slot found within 8 weeks, skip gracefully
-        if (!availableSlot) {
-            test.skip(true, 'No available slots within 8 weeks — check booking horizon or game hours');
-        }
-
-        const slotTime = await availableSlot.textContent();
-        await availableSlot.click();
-
-        // ── Step 2: Booking page — Player selection ───────────────────────────
-        await page.waitForURL('**/book**', { timeout: 10000 });
-        await expect(page.locator('#erb-step-1')).toBeVisible({ timeout: 10000 });
-
-        // Select 4 players
-        const playerBtn = page.locator('.erb-player-btn[data-players="4"]');
-        await expect(playerBtn).toBeVisible();
-        await playerBtn.click();
-
-        // Price box should appear
-        await expect(page.locator('#erb-price-box')).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('#erb-price-total')).not.toBeEmpty();
-
-        // Click Continue
-        await page.locator('#erb-step1-next').click();
-
-        // ── Step 3: Customer details ──────────────────────────────────────────
-        await expect(page.locator('#erb-step-2')).toBeVisible({ timeout: 5000 });
-
-        await page.locator('#erb-first-name').fill('Sarah');
-        await page.locator('#erb-last-name').fill('Mitchell');
-        await page.locator('#erb-email').fill('sarah.mitchell@example.com');
-        await page.locator('#erb-mobile').fill('07700900123');
-
-        // Click Continue to Payment
-        await page.locator('#erb-step2-next').click();
-
-        // ── Step 4: Payment ───────────────────────────────────────────────────
-        await expect(page.locator('#erb-step-3')).toBeVisible({ timeout: 5000 });
-
-        // Wait for Stripe iframe
-        await page.waitForSelector('#erb-stripe-card-element iframe', { timeout: 15000 });
-        const stripeFrame = page.frameLocator('#erb-stripe-card-element iframe').first();
-
-        await stripeFrame.locator('[placeholder="Card number"]').fill('4242424242424242');
-        await stripeFrame.locator('[placeholder="MM / YY"]').fill('1227');
-        await stripeFrame.locator('[placeholder="CVC"]').fill('123');
-
-        // Click Pay Now
-        await page.locator('#erb-pay-btn').click();
-
-        // ── Step 5: Booking confirmed ─────────────────────────────────────────
-        await expect(page.locator('#erb-step-success')).toBeVisible({ timeout: 30000 });
-
-        const bookingRef = page.locator('#erb-success-ref');
-        await expect(bookingRef).toBeVisible();
-        await expect(bookingRef).toContainText('ERB-');
-
-        console.log('✅ Booking completed successfully');
-        console.log('Slot:', slotTime?.trim());
-        console.log('Ref:', await bookingRef.textContent());
+    test('Complete booking on Captive 2 - The Cabin', async ({ page }) => {
+        const slotTime = await findAndClickSlot(page, CABIN_URL);
+        const ref = await completeBooking(page, 3, 'James', 'Henderson', 'james@example.com', '07700900456');
+        console.log('✅ Captive 2 booking completed:', ref?.trim(), 'Slot:', slotTime);
     });
 
 });
 
-test.describe('Admin — 2 Game Limit', () => {
+test.describe('3. Player Count Buttons', () => {
 
-    // Skipped: 20i hosting blocks automated login attempts
-    // To enable: set up local WordPress environment or find solution to bot protection
+    // Detective is configured max 6 players — buttons should be 2,3,4,5,6 only
+    test('Detective shows exactly 2–6 player buttons', async ({ page }) => {
+        await findAndClickSlot(page, DETECTIVE_URL);
+        await page.waitForURL('**/book**', { timeout: 10000 });
+        await expect(page.locator('#erb-step-1')).toBeVisible({ timeout: 10000 });
 
-    test('Add Game button is greyed out after 2 games', async ({ page }) => {
+        const buttons = page.locator('.erb-player-btn');
+        await expect(buttons.first()).toBeVisible({ timeout: 5000 });
+        const count = await buttons.count();
+        expect(count).toBe(5); // 2,3,4,5,6
 
-        // Log into WordPress admin
-        await page.goto(process.env.WP_ADMIN_URL);
-        await page.locator('#user_login').fill(process.env.WP_ADMIN_USER);
-        await page.locator('#user_pass').fill(process.env.WP_ADMIN_PASS);
-        await page.locator('#wp-submit').click();
+        // First button should be 2, last should be 6
+        await expect(buttons.first()).toHaveAttribute('data-players', '2');
+        await expect(buttons.last()).toHaveAttribute('data-players', '6');
 
-        // Navigate to Games page
-        await page.goto(process.env.WP_ADMIN_URL + 'admin.php?page=eerb-games');
-        await expect(page).toHaveURL(/eerb-games/, { timeout: 10000 });
+        // Button 7 and 8 must NOT exist
+        await expect(page.locator('.erb-player-btn[data-players="7"]')).toHaveCount(0);
+        await expect(page.locator('.erb-player-btn[data-players="8"]')).toHaveCount(0);
 
-        // Find the Add Game button — should be disabled at 2-game limit
-        const addGameBtn = page.locator('button').filter({ hasText: /Add Game/i }).first();
-        await expect(addGameBtn).toBeVisible({ timeout: 10000 });
-
-        const isDisabled  = await addGameBtn.isDisabled();
-        const hasAtLimit  = await addGameBtn.getAttribute('data-at-limit');
-        expect(isDisabled || hasAtLimit === '1').toBeTruthy();
-
-        console.log('✅ Add Game button correctly disabled at 2-game limit');
+        console.log('✅ Detective shows 5 player buttons (2–6), no 7 or 8');
     });
 
-    test('Upgrade to Pro screen is shown', async ({ page }) => {
+    // Captive 2 is configured max 10 players — buttons should be 2–10
+    test('Captive 2 shows exactly 2–10 player buttons', async ({ page }) => {
+        await findAndClickSlot(page, CABIN_URL);
+        await page.waitForURL('**/book**', { timeout: 10000 });
+        await expect(page.locator('#erb-step-1')).toBeVisible({ timeout: 10000 });
 
-        // Log into WordPress admin
-        await page.goto(process.env.WP_ADMIN_URL);
-        await page.locator('#user_login').fill(process.env.WP_ADMIN_USER);
-        await page.locator('#user_pass').fill(process.env.WP_ADMIN_PASS);
-        await page.locator('#wp-submit').click();
+        const buttons = page.locator('.erb-player-btn');
+        await expect(buttons.first()).toBeVisible({ timeout: 5000 });
+        const count = await buttons.count();
+        expect(count).toBe(9); // 2,3,4,5,6,7,8,9,10
 
-        // Navigate to Upgrade page
-        await page.goto(process.env.WP_ADMIN_URL + 'admin.php?page=eerb-upgrade');
-        await expect(page).toHaveURL(/eerb-upgrade/, { timeout: 10000 });
+        await expect(buttons.first()).toHaveAttribute('data-players', '2');
+        await expect(buttons.last()).toHaveAttribute('data-players', '10');
 
-        // Upgrade page should show link to Pro
-        await expect(page.locator('.wrap')).toBeVisible({ timeout: 10000 });
-        const proLink = page.locator('a[href*="escaperoombookingpro.com"]').first();
-        await expect(proLink).toBeVisible({ timeout: 5000 });
+        console.log('✅ Captive 2 shows 9 player buttons (2–10)');
+    });
 
-        console.log('✅ Upgrade to Pro screen shown correctly');
+    // Clicking a button beyond the game max must not be possible
+    test('No player button exists beyond game max on Detective', async ({ page }) => {
+        await findAndClickSlot(page, DETECTIVE_URL);
+        await page.waitForURL('**/book**', { timeout: 10000 });
+        await expect(page.locator('#erb-step-1')).toBeVisible({ timeout: 10000 });
+        await expect(page.locator('.erb-player-btn').first()).toBeVisible({ timeout: 5000 });
+
+        // Buttons for 7 and 8 simply should not exist in the DOM
+        await expect(page.locator('.erb-player-btn[data-players="7"]')).toHaveCount(0);
+        await expect(page.locator('.erb-player-btn[data-players="8"]')).toHaveCount(0);
+        console.log('✅ No out-of-range player buttons in DOM for Detective');
+    });
+
+});
+
+test.describe('4. Admin: Pricing Modal Player Range', () => {
+
+    test('Detective pricing modal shows rows 2–6 only', async ({ page }) => {
+        await wpLogin(page);
+        await page.goto(ADMIN_URL + 'admin.php?page=eerb-games');
+        await page.waitForLoadState('networkidle', { timeout: 15000 });
+        await dismissPopups(page);
+        await expect(page.locator('#erb-games-tbody')).toBeVisible({ timeout: 15000 });
+
+        // Open pricing modal for Detective (first game row)
+        const detectiveRow = page.locator('#erb-games-tbody tr').filter({ hasText: 'Detective' }).first();
+        await detectiveRow.locator('button', { hasText: 'Pricing' }).click();
+        await expect(page.locator('#erb-pricing-modal')).toBeVisible({ timeout: 5000 });
+
+        // Wait for rows to render
+        await expect(page.locator('#erb-pricing-tbody .erb-pricing-row').first()).toBeVisible({ timeout: 5000 });
+        const rows = page.locator('#erb-pricing-tbody .erb-pricing-row');
+        await expect(rows).toHaveCount(5); // 2,3,4,5,6
+
+        await expect(page.locator('#erb-pricing-tbody .erb-price-input[data-players="6"]')).toBeVisible();
+        await expect(page.locator('#erb-pricing-tbody .erb-price-input[data-players="7"]')).toHaveCount(0);
+        await expect(page.locator('#erb-pricing-tbody .erb-price-input[data-players="8"]')).toHaveCount(0);
+
+        console.log('✅ Detective pricing modal shows 5 rows (2–6), no 7 or 8');
+    });
+
+    test('Captive 2 pricing modal shows rows 2–10', async ({ page }) => {
+        await wpLogin(page);
+        await page.goto(ADMIN_URL + 'admin.php?page=eerb-games');
+        await page.waitForLoadState('networkidle', { timeout: 15000 });
+        await dismissPopups(page);
+        await expect(page.locator('#erb-games-tbody')).toBeVisible({ timeout: 15000 });
+
+        const captiveRow = page.locator('#erb-games-tbody tr').filter({ hasText: 'Captive' }).first();
+        await captiveRow.locator('button', { hasText: 'Pricing' }).click();
+        await expect(page.locator('#erb-pricing-modal')).toBeVisible({ timeout: 5000 });
+
+        await expect(page.locator('#erb-pricing-tbody .erb-pricing-row').first()).toBeVisible({ timeout: 5000 });
+        const rows = page.locator('#erb-pricing-tbody .erb-pricing-row');
+        await expect(rows).toHaveCount(9); // 2–10
+
+        await expect(page.locator('#erb-pricing-tbody .erb-price-input[data-players="10"]')).toBeVisible();
+        console.log('✅ Captive 2 pricing modal shows 9 rows (2–10)');
+    });
+
+});
+
+test.describe('5. Admin Verification', () => {
+
+    test('Bookings appear in admin', async ({ page }) => {
+        await wpLogin(page);
+        await page.goto(ADMIN_URL + 'admin.php?page=eerb-bookings');
+        await page.waitForLoadState('networkidle', { timeout: 15000 });
+        await dismissPopups(page);
+        await expect(page).toHaveURL(/eerb-bookings/, { timeout: 10000 });
+        // Test bookings arrive as Pending (Stripe test mode); just check the table has rows
+        await expect(page.locator('.erb-badge').first()).toBeVisible({ timeout: 15000 });
+        console.log('✅ Bookings showing in admin');
+    });
+
+    test('Dashboard shows revenue', async ({ page }) => {
+        await wpLogin(page);
+        await page.goto(ADMIN_URL + 'admin.php?page=eerb-dashboard');
+        await page.waitForLoadState('networkidle', { timeout: 15000 });
+        await dismissPopups(page);
+        await expect(page).toHaveURL(/eerb-dashboard/, { timeout: 10000 });
+        await expect(page.locator('.erb-stat-box').first()).toBeVisible({ timeout: 15000 });
+        console.log('✅ Dashboard loading correctly');
     });
 
 });

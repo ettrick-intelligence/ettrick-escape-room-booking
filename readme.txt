@@ -4,7 +4,7 @@ Tags: escape room, booking, stripe, calendar, payments
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -126,6 +126,11 @@ The free version contains links to https://escaperoombookingpro.com for upgrade 
 7. Admin games setup screen
 
 == Changelog ==
+
+= 1.3.2 =
+* Fixed player count buttons on booking page — now respects each game's configured max players instead of always showing 2–8
+* Fixed admin pricing modal — rows now match each game's min/max player range instead of always showing 2–8
+* Added Playwright end-to-end tests covering calendar display, full booking flow, player count buttons, admin pricing modal, and admin verification
 
 = 1.1.8 =
 * Updated tested up to WordPress 6.9

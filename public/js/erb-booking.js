@@ -33,6 +33,8 @@
             ERB.Booking.state    = state;
             ERB.Booking.gameData = (eerbPublic.gamesData && eerbPublic.gamesData[parseInt(state.gameId, 10)]) || null;
 
+            ERB.Booking.renderPlayerButtons();
+
             // Resume existing hold or place a new one
             var holdExpires = state.holdExpires ? new Date(state.holdExpires) : null;
             var now         = new Date();
@@ -128,6 +130,22 @@
             if (n === 2) ERB.Booking.renderStep2Summary();
             if (n === 3) ERB.Booking.renderStep3();
             window.scrollTo({ top: $('#erb-booking-app').offset().top - 40, behavior: 'smooth' });
+        },
+
+        // ── Player buttons ────────────────────────────────────────────────────
+
+        renderPlayerButtons: function () {
+            var maxPlayers = (ERB.Booking.gameData && ERB.Booking.gameData.max_players) ? ERB.Booking.gameData.max_players : 8;
+            var $grid = $('#erb-player-grid');
+            $grid.empty();
+            for (var i = 2; i <= maxPlayers; i++) {
+                $grid.append(
+                    '<button class="erb-player-btn" data-players="' + i + '">' +
+                    '<div class="erb-player-btn__num">' + i + '</div>' +
+                    '<div class="erb-player-btn__word">players</div>' +
+                    '</button>'
+                );
+            }
         },
 
         // ── Summary helpers ───────────────────────────────────────────────────

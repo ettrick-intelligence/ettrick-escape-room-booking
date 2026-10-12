@@ -28,10 +28,11 @@ class EERB_Public {
                 $prices[ (int) $p->player_count ] = (int) $p->price_pence;
             }
             $games_data[ (int) $g->id ] = array(
-                'id'     => (int) $g->id,
-                'name'   => $g->name,
-                'slug'   => $g->slug,
-                'prices' => empty( $prices ) ? new stdClass() : (object) $prices,
+                'id'          => (int) $g->id,
+                'name'        => $g->name,
+                'slug'        => $g->slug,
+                'prices'      => empty( $prices ) ? new stdClass() : (object) $prices,
+                'max_players' => (int) $g->max_players,
             );
         }
 

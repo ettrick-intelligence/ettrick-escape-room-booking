@@ -328,26 +328,8 @@ $lite_at_limit   = defined( 'EERB_LITE' ) && $lite_game_count >= EERB_LITE_GAME_
                 <th><?php esc_html_e( 'Total Price (£)', 'ettrick-escape-room-booking' ); ?></th>
                 <th><?php esc_html_e( 'Per Person', 'ettrick-escape-room-booking' ); ?></th>
             </tr></thead>
-            <tbody>
-            <?php for ( $p = 2; $p <= 8; $p++ ) :
-                $defaults = array( 2=>65, 3=>87, 4=>105, 5=>120, 6=>132, 7=>140, 8=>150 );
-            ?>
-                <tr class="erb-pricing-row" data-players="<?php echo absint( $p ); ?>">
-                    <td style="text-align:center;font-weight:700;font-size:1rem;"><?php echo absint( $p ); ?></td>
-                    <td>
-                        <div style="display:flex;align-items:center;gap:.3rem;">
-                            <span>£</span>
-                            <input type="number" class="erb-price-input" data-players="<?php echo absint( $p ); ?>"
-                                   value="<?php echo esc_html( $defaults[$p] ); ?>" min="0" step="0.01"
-                                   style="width:80px;padding:.3rem .5rem;border:1px solid #e5e7eb;border-radius:4px;"
-                                   oninput="EERBGames.updatePerPerson(this)">
-                        </div>
-                    </td>
-                    <td class="erb-per-person-<?php echo absint( $p ); ?>" style="color:#6b7280;font-size:.85rem;">
-                        £<?php echo esc_html( number_format( $defaults[$p] / $p, 2 ) ); ?>
-                    </td>
-                </tr>
-            <?php endfor; ?>
+            <tbody id="erb-pricing-tbody">
+                <!-- Rows rendered by JS using game.min_players / game.max_players -->
             </tbody>
         </table>
 

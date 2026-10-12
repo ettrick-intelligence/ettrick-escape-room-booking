@@ -147,32 +147,44 @@
             $('#erb-pricing-game-id').val(gameId);
             $('#erb-pricing-modal-title').text('Pricing — ' + gameName);
 
-            // Reset to defaults
+            var sym      = (window.eerbAdmin && eerbAdmin.currencySymbol) ? eerbAdmin.currencySymbol : '£';
             var defaults = {2:65,3:87,4:105,5:120,6:132,7:140,8:150};
-            $('.erb-price-input').each(function () {
-                var p = $(this).data('players');
-                $(this).val(defaults[p] || '');
-                EERBGames.updatePerPerson(this);
-            });
 
-            // Filter rows to min/max range
             ERB.ajax('eerb_get_game', { id: gameId }, function (game) {
                 var minP = parseInt(game.min_players, 10) || 2;
                 var maxP = parseInt(game.max_players, 10) || 8;
-                $('.erb-pricing-row').each(function () {
-                    var p = parseInt($(this).data('players'), 10);
-                    $(this).toggle(p >= minP && p <= maxP);
-                });
 
-            // Load saved prices
-            ERB.ajax('eerb_get_game', { id: gameId }, function (game) {
-                if (!game.prices || !game.prices.length) return;
-                game.prices.forEach(function (pr) {
-                    var $input = $('.erb-price-input[data-players="' + pr.player_count + '"]');
-                    $input.val((pr.price_pence / 100).toFixed(2));
-                    EERBGames.updatePerPerson($input[0]);
-                });
-            });
+                // Build rows dynamically for this game's player range
+                var $tbody = $('#erb-pricing-tbody').empty();
+                for (var p = minP; p <= maxP; p++) {
+                    var defaultVal = defaults[p] ? defaults[p].toFixed(2) : '';
+                    var perPerson  = (defaults[p] && p > 0) ? (defaults[p] / p).toFixed(2) : '0.00';
+                    $tbody.append(
+                        '<tr class="erb-pricing-row" data-players="' + p + '">' +
+                        '<td style="text-align:center;font-weight:700;font-size:1rem;">' + p + '</td>' +
+                        '<td><div style="display:flex;align-items:center;gap:.3rem;">' +
+                        '<span>' + sym + '</span>' +
+                        '<input type="number" class="erb-price-input" data-players="' + p + '"' +
+                        ' value="' + defaultVal + '" min="0" step="0.01"' +
+                        ' style="width:80px;padding:.3rem .5rem;border:1px solid #e5e7eb;border-radius:4px;"' +
+                        ' oninput="EERBGames.updatePerPerson(this)">' +
+                        '</div></td>' +
+                        '<td class="erb-per-person-' + p + '" style="color:#6b7280;font-size:.85rem;">' +
+                        sym + perPerson + '</td>' +
+                        '</tr>'
+                    );
+                }
+
+                // Overlay saved prices
+                if (game.prices && game.prices.length) {
+                    game.prices.forEach(function (pr) {
+                        var $input = $('.erb-price-input[data-players="' + pr.player_count + '"]');
+                        if ($input.length) {
+                            $input.val((pr.price_pence / 100).toFixed(2));
+                            EERBGames.updatePerPerson($input[0]);
+                        }
+                    });
+                }
             });
 
             ERB.openModal('erb-pricing-modal');
@@ -181,13 +193,14 @@
         savePricing: function () {
             var gameId = $('#erb-pricing-game-id').val();
             var prices = {};
-            $('.erb-price-input').each(function () {
+            // Only save rows currently in the table (matches the game's min/max range)
+            $('#erb-pricing-tbody .erb-price-input').each(function () {
                 prices[$(this).data('players')] = $(this).val();
             });
-            ERB.ajax('eerb_save_pricing', { game_id: gameId, prices: prices }, function (data) {
+            ERB.ajax('eerb_save_pricing', { game_id: gameId, prices: prices }, function () {
                 ERB.closeModal('erb-pricing-modal');
                 ERB.notice('Pricing saved.');
-            }, function(err) {
+            }, function (err) {
                 ERB.notice('Failed to save pricing: ' + err, 'error');
             });
         },
