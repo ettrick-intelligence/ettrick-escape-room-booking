@@ -106,6 +106,8 @@ require_once EERB_PLUGIN_DIR . 'includes/class-erb-pagination.php';
         $this->add_action( 'wp_ajax_eerb_validate_promo',          $public, 'ajax_validate_promo' );
         $this->add_action( 'wp_ajax_nopriv_eerb_validate_promo',   $public, 'ajax_validate_promo' );
 
+        $this->add_action( 'wp_ajax_eerb_check_email',              $public, 'ajax_check_email' );
+        $this->add_action( 'wp_ajax_nopriv_eerb_check_email',      $public, 'ajax_check_email' );
         $this->add_action( 'wp_ajax_eerb_customer_login',          $public, 'ajax_customer_login' );
         $this->add_action( 'wp_ajax_nopriv_eerb_customer_login',   $public, 'ajax_customer_login' );
 

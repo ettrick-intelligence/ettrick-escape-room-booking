@@ -519,3 +519,32 @@
 .erb-result__icon { font-size: 56px; margin-bottom: 12px; }
 .erb-result h2 { margin: 0 0 8px; font-size: 24px; }
 .erb-result p  { color: var(--erb-muted); font-size: 16px; }
+
+/* Password toggle */
+.erb-password-wrap {
+    position: relative;
+}
+.erb-password-wrap input[type="password"],
+.erb-password-wrap input[type="text"] {
+    padding-right: 2.5rem !important;
+}
+.erb-pwd-toggle {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.25rem;
+    color: #9ca3af;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+}
+.erb-pwd-toggle:hover { color: #374151; }
+.erb-eye-icon,
+.erb-eye-off-icon {
+    width: 18px;
+    height: 18px;
+}

@@ -56,7 +56,13 @@
 
             // Create-account checkbox toggle
             $('#erb-create-account').on('change', function () {
-                $('#erb-create-password-wrap').toggle($(this).is(':checked'));
+                var checked = $(this).is(':checked');
+                $('#erb-create-password-wrap').toggle(checked);
+                if (!checked) {
+                    $('#erb-new-password, #erb-confirm-password').val('').attr('type', 'password');
+                    $('#erb-create-password-wrap .erb-eye-icon').show();
+                    $('#erb-create-password-wrap .erb-eye-off-icon').hide();
+                }
             });
         },
 
@@ -225,6 +231,17 @@
             ERB.Booking.goToStep(2);
         },
 
+        // ── Password toggle ───────────────────────────────────────────────────
+
+        togglePassword: function (fieldId, btn) {
+            var $input = $('#' + fieldId);
+            var isPassword = $input.attr('type') === 'password';
+            $input.attr('type', isPassword ? 'text' : 'password');
+            $(btn).find('.erb-eye-icon').toggle(!isPassword);
+            $(btn).find('.erb-eye-off-icon').toggle(isPassword);
+            $(btn).attr('aria-label', isPassword ? 'Hide password' : 'Show password');
+        },
+
         // ── Step 2: Details ───────────────────────────────────────────────────
 
         switchTab: function (tab) {
@@ -276,19 +293,49 @@
                 if (!mob || !ERB.validateMobile(mob)) errors.push('A valid mobile number is required.');
 
                 var createAcct = $('#erb-create-account').is(':checked');
-                if (createAcct && $('#erb-new-password').val().length < 8) {
-                    errors.push('Password must be at least 8 characters.');
+                if (createAcct) {
+                    var pwd     = $('#erb-new-password').val();
+                    var pwdConf = $('#erb-confirm-password').val();
+                    if (pwd.length < 8) {
+                        errors.push('Password must be at least 8 characters.');
+                    } else if (pwd !== pwdConf) {
+                        errors.push('Passwords do not match.');
+                    }
                 }
 
                 if (errors.length) { alert(errors.join('\n')); return; }
+
+                // If creating an account, check server-side whether email already has one
+                if (createAcct) {
+                    ERB.ajax('eerb_check_email', { email: em }, function(data) {
+                        if (data.account_exists) {
+                            alert('An account already exists for ' + em + '. Please use the "Already have an account?" tab to log in, or use "Forgot password?" to reset your password.');
+                            return;
+                        }
+                        ERB.BookingState.set({
+                            firstName:     fn,
+                            lastName:      ln,
+                            email:         em,
+                            mobile:        mob,
+                            createAccount: createAcct,
+                            newPassword:   $('#erb-new-password').val(),
+                            isGuest:       true,
+                        });
+                        ERB.Booking.customerName = fn + ' ' + ln;
+                        ERB.Booking.goToStep(3);
+                    }, function(msg) {
+                        alert(msg);
+                    });
+                    return; // wait for AJAX response
+                }
 
                 ERB.BookingState.set({
                     firstName:     fn,
                     lastName:      ln,
                     email:         em,
                     mobile:        mob,
-                    createAccount: createAcct,
-                    newPassword:   createAcct ? $('#erb-new-password').val() : '',
+                    createAccount: false,
+                    newPassword:   '',
                     isGuest:       true,
                 });
                 ERB.Booking.customerName = fn + ' ' + ln;

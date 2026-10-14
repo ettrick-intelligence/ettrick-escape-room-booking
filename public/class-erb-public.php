@@ -155,6 +155,17 @@ class EERB_Public {
         }
     }
 
+    // ── AJAX: Check email ─────────────────────────────────────────────────────
+
+    public function ajax_check_email() {
+        check_ajax_referer( 'eerb_public_nonce', 'nonce' );
+        $email    = sanitize_email( $_POST['email'] ?? '' );
+        $customer = ( new EERB_Customers() )->get_by_email( $email );
+        EERB_Helpers::json_success( array(
+            'account_exists' => ( $customer && ! empty( $customer->password_hash ) ),
+        ) );
+    }
+
     // ── AJAX: Customer login ──────────────────────────────────────────────────
 
     public function ajax_customer_login() {
