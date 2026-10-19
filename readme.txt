@@ -4,7 +4,7 @@ Tags: escape room, booking, stripe, calendar, payments
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.2
+Stable tag: 1.3.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -128,6 +128,10 @@ The free version contains links to https://escaperoombookingpro.com for upgrade 
 7. Admin games setup screen
 
 == Changelog ==
+
+= 1.3.3 =
+* Synced booking flow improvements from Pro — player count buttons and pricing modal now respect each game's configured min/max players
+* Improved shared room overlap detection to use range-based comparison, preventing edge-case double-bookings across games with different slot schedules
 
 = 1.3.2 =
 * Fixed player count buttons on booking page — now respects each game's configured max players instead of always showing 2–8
