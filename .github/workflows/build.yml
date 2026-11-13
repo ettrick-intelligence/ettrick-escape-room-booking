@@ -1,0 +1,39 @@
+name: Check and build
+
+# Runs on every push and proposed change. It checks the code and builds a zip for
+# installing on a TEST site. It does NOT publish to WordPress.org (that is still done
+# with SVN) and does NOT touch any live site. This repository is PUBLIC: no secrets.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make sure no keys have been committed (this repository is public)
+        run: |
+          if grep -rIn -E "sk_(live|test)_[A-Za-z0-9]{10,}|whsec_[A-Za-z0-9]{10,}|sk-ant-[A-Za-z0-9]{10,}|BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY" . --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=vendor --exclude=package-lock.json; then
+            echo "A possible key or secret was found above. Remove it and tell John." >&2
+            exit 1
+          fi
+          echo "No keys found."
+
+      - name: Check every PHP file (current PHP)
+        run: sh tools/lint.sh admin includes public tests escape-room-booking.php uninstall.php
+
+      - name: Check every plugin file on PHP 7.4 (oldest supported)
+        run: docker run --rm -v "$PWD":/app -w /app php:7.4-cli sh tools/lint.sh admin includes public escape-room-booking.php uninstall.php
+
+      - name: Build the plugin zip
+        run: tools/build.sh
+
+      - name: Keep the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ettrick-escape-room-booking-plugin
+          path: dist/*.zip
+          retention-days: 30
