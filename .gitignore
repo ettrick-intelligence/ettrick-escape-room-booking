@@ -26,3 +26,6 @@ vendor/
 .env
 old.env
 svn-ettrick/
+
+# Built zips
+dist/

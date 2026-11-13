@@ -48,7 +48,7 @@ class ViewSyntaxTest extends TestCase {
                 for ( $j = $i + 1; $j < count( $lines ); $j++ ) {
                     $next = trim( $lines[ $j ] );
                     if ( $next === '' ) continue;
-                    if ( str_starts_with( $next, '<' ) && ! str_starts_with( $next, '<?php' ) && ! str_starts_with( $next, '<!--' ) ) {
+                    if ( 0 === strpos( $next, '<' ) && 0 !== strpos( $next, '<?php' ) && 0 !== strpos( $next, '<!--' ) ) {
                         $orphans[] = "Line " . ( $i + 1 ) . ": orphaned '<?php' followed by HTML on line " . ( $j + 1 );
                     }
                     break;
@@ -92,7 +92,7 @@ class ViewSyntaxTest extends TestCase {
             $lines  = explode( "\n", $source );
             foreach ( $lines as $i => $line ) {
                 $trimmed = ltrim( $line );
-                if ( str_starts_with( $trimmed, '//' ) || str_starts_with( $trimmed, '*' ) ) continue;
+                if ( 0 === strpos( $trimmed, '//' ) || 0 === strpos( $trimmed, '*' ) ) continue;
                 $this->assertStringNotContainsString(
                     '$sql =',
                     $line,
